@@ -159,6 +159,7 @@ void setup() {
       endHour = request->getParam("endHour", true)->value().toInt();
       endMinute = request->getParam("endMinute", true)->value().toInt();
       request->send(200, "text/plain", "Time updated");
+      execute();
     } else {
       request->send(400, "text/plain", "Invalid parameters");
     }
@@ -184,8 +185,8 @@ void setup() {
   server.begin();
 }
 
-void loop() {
-  timeClient.update();
+void execute() {
+    timeClient.update();
   int currentHour = timeClient.getHours();
   int currentMinute = timeClient.getMinutes();
   sprintf(buff,"\nstart hour : %d\nstart min: %d\n curr hour : %d\ncurr min : %d",startHour,startMinute,currentHour,currentMinute);
@@ -199,6 +200,9 @@ void loop() {
     Serial.println  ("Lights Turn OFF");
     digitalWrite(relayPin, LOW);
   }
+}
 
+void loop() {
+  execute();
   delay(10*60*1000); // Check every 10 mins
 }
