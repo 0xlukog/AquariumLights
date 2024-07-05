@@ -78,6 +78,12 @@ const char* index_html = R"rawliteral(
         <br>
         <button type="submit">Update</button>
     </form>
+    <form action="/switch-on" method="POST" id="switchOn">
+        <button type="submit">ON</button>
+    </form>
+    <form action="/switch-off" method="POST" id="switchOff">
+        <button type="submit">OFF</button>
+    </form>
     <script>
         const form = document.getElementById('updateTimeForm');
 
@@ -163,6 +169,18 @@ void setup() {
 
   });
 
+  server.on("/switchOn", HTTP_POST, [](AsyncWebServerRequest *request) {
+    request->send(200, "text/plain", "Switched On!");
+    digitalWrite(relayPin, HIGH);
+    Serial.println("Light Switched On!");
+  });
+
+  server.on("/switchOff", HTTP_POST, [](AsyncWebServerRequest *request) {
+    request->send(200, "text/plain", "Switched Off!");
+    digitalWrite(relayPin, LOW);
+    Serial.println("Light Switched Off!");
+  });
+
   server.begin();
 }
 
@@ -182,6 +200,5 @@ void loop() {
     digitalWrite(relayPin, LOW);
   }
 
-  delay(1000); // Check every second
+  delay(10*60*1000); // Check every 10 mins
 }
-
