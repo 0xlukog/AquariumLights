@@ -96,6 +96,12 @@ const char* index_html = R"rawliteral(
         <br>
         <button type="submit">Update</button>
     </form>
+    <form action="/switch-on" method="POST" id="switchOn">
+        <button type="submit">ON</button>
+    </form>
+    <form action="/switch-off" method="POST" id="switchOff">
+        <button type="submit">OFF</button>
+    </form>
     <script>
         const form = document.getElementById('updateTimeForm');
 
@@ -163,9 +169,22 @@ void setup() {
       endHour = request->getParam("endHour", true)->value().toInt();
       endMinute = request->getParam("endMinute", true)->value().toInt();
       request->send(200, "text/plain", "Time updated");
+      execute();
     } else {
       request->send(400, "text/plain", "Invalid parameters");
     }
+  });
+
+  server.on("/switchOn", HTTP_POST, [](AsyncWebServerRequest *request) {
+    request->send(200, "text/plain", "Switched On!");
+    digitalWrite(relayPin, HIGH);
+    Serial.println("Light Switched On!");
+  });
+
+  server.on("/switchOff", HTTP_POST, [](AsyncWebServerRequest *request) {
+    request->send(200, "text/plain", "Switched Off!");
+    digitalWrite(relayPin, LOW);
+    Serial.println("Light Switched Off!");
   });
 
   server.begin();
@@ -176,8 +195,8 @@ void setup() {
   }
 }
 
-void loop() {
-  timeClient.update();
+void execute() {
+    timeClient.update();
   int currentHour = timeClient.getHours();
   int currentMinute = timeClient.getMinutes();
   sprintf(buff,"\nstart hour : %d\nstart min: %d\n curr hour : %d\ncurr min : %d",startHour,startMinute,currentHour,currentMinute);
@@ -205,4 +224,9 @@ bool syncTimeWithRetries() {
   }
   Serial.println("Failed to sync time after multiple attempts");
   return false;
+}
+
+void loop() {
+  execute();
+  delay(10*60*1000); // Check every 10 mins
 }
