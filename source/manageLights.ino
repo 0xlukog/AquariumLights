@@ -2,18 +2,36 @@
 #include <ESPAsyncWebServer.h>
 #include <NTPClient.h>
 #include <WiFiUdp.h>
-#include <ESPmDNS.h> // Include the mDNS library
+#include <ESPmDNS.h>
 
 // WiFi credentials
-const char* ssid = "SSID";
-const char* password = "PASSWORD";
+const char* ssid = "TP-Link_B432";
+const char* password = "10499252";
 
 // NTP setup
 WiFiUDP ntpUDP;
-NTPClient timeClient(ntpUDP, "pool.ntp.org");
+NTPClient timeClient(ntpUDP, "pool.ntp.org", 19800, 60000); // 19800 seconds offset for Asia/Kolkata (5.5 hours)
 
 // Relay pin
-const int relayPin = 5;
+const int relayPin = 13;
+
+// LED pin for sync failure indication
+const int ledPin = 2;
+
+// Start and end times (24-hour format)
+int startHour = 9;
+int startMinute = 0;
+int endHour = 18;
+int endMinute = 0;
+
+
+char buff[256]; 
+
+// Server setup
+AsyncWebServer server(80);
+
+// Max number of NTP retries
+const int maxRetries = 10;
 
 const char* index_html = R"rawliteral(
 <!DOCTYPE html>
@@ -104,21 +122,15 @@ const char* index_html = R"rawliteral(
 
 )rawliteral";
 
-
-// Start and end times (24-hour format)
-int startHour = 8;
-int startMinute = 0;
-int endHour = 20;
-int endMinute = 0;
-
-char buff[256];
-
-// Server setup
-AsyncWebServer server(80);
-
 void setup() {
   Serial.begin(115200);
-  
+
+  // Initialize relay and LED pins
+  pinMode(relayPin, OUTPUT);
+  digitalWrite(relayPin, LOW);
+  pinMode(ledPin, OUTPUT);
+  digitalWrite(ledPin, LOW);
+
   // Connect to Wi-Fi
   WiFi.begin(ssid, password);
   while (WiFi.status() != WL_CONNECTED) {
@@ -132,7 +144,7 @@ void setup() {
   Serial.println(WiFi.localIP());
 
   // Initialize mDNS
-  if (!MDNS.begin("aquarium-light")) { // Set your unique hostname here
+  if (!MDNS.begin("aquarium-light")) {
     Serial.println("Error starting mDNS");
     return;
   }
@@ -140,11 +152,9 @@ void setup() {
 
   // Initialize NTP
   timeClient.begin();
-  timeClient.setTimeOffset(19800); // Adjust for your timezone
 
-  // Initialize relay pin
-  pinMode(relayPin, OUTPUT);
-  digitalWrite(relayPin, LOW);
+  // Sync time with NTP
+  bool ntpSyncSuccess = syncTimeWithRetries();
 
   // Initialize server
   server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
@@ -152,7 +162,7 @@ void setup() {
   });
 
   server.on("/update-time", HTTP_POST, [](AsyncWebServerRequest *request) {
-    if (request->hasParam("startHour", true) && request->hasParam("startMinute", true) && 
+    if (request->hasParam("startHour", true) && request->hasParam("startMinute", true) &&
         request->hasParam("endHour", true) && request->hasParam("endMinute", true)) {
       startHour = request->getParam("startHour", true)->value().toInt();
       startMinute = request->getParam("startMinute", true)->value().toInt();
@@ -163,11 +173,6 @@ void setup() {
     } else {
       request->send(400, "text/plain", "Invalid parameters");
     }
-
-    Serial.println("Time Details Updated");
-    sprintf(buff,"\nstart hour : %d\nstart min: %d\nend hour : %d\nend min : %d",startHour,startMinute,endHour,endMinute);
-    Serial.println(buff);
-
   });
 
   server.on("/switchOn", HTTP_POST, [](AsyncWebServerRequest *request) {
@@ -183,6 +188,11 @@ void setup() {
   });
 
   server.begin();
+
+  // Indicate sync failure if necessary
+  if (!ntpSyncSuccess) {
+    digitalWrite(ledPin, HIGH); // Turn on LED to indicate failure
+  }
 }
 
 void execute() {
@@ -200,6 +210,20 @@ void execute() {
     Serial.println  ("Lights Turn OFF");
     digitalWrite(relayPin, LOW);
   }
+  delay(60*1000); // Check every second
+}
+
+bool syncTimeWithRetries() {
+  for (int i = 0; i < maxRetries; ++i) {
+    timeClient.update();
+    if (timeClient.getEpochTime() != 0) {
+      Serial.println("Time synced successfully");
+      return true;
+    }
+    delay(2000); // Wait 2 seconds before retrying
+  }
+  Serial.println("Failed to sync time after multiple attempts");
+  return false;
 }
 
 void loop() {
